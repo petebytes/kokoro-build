@@ -3,9 +3,9 @@ import VoiceService from './services/VoiceService.js';
 import PlayerState from './state/PlayerState.js';
 import PlayerControls from './components/PlayerControls.js';
 import VoiceSelector from './components/VoiceSelector.js';
+import VoiceDemos from './components/VoiceDemos.js';
 import WaveVisualizer from './components/WaveVisualizer.js';
 import TextEditor from './components/TextEditor.js';
-import config from './config.js';
 
 export class App {
     constructor() {
@@ -18,7 +18,20 @@ export class App {
             formatSelect: document.getElementById('format-select'),
             status: document.getElementById('status'),
             cancelBtn: document.getElementById('cancel-btn'),
-            streamingNotice: document.getElementById('streaming-notice')
+            // New controls
+            gainSlider: document.getElementById('gain-slider'),
+            gainValue: document.getElementById('gain-value'),
+            // Normalization checkboxes
+            normUnits: document.getElementById('norm-units'),
+            normUrls: document.getElementById('norm-urls'),
+            normEmails: document.getElementById('norm-emails'),
+            normPhones: document.getElementById('norm-phones'),
+            normPlurals: document.getElementById('norm-plurals'),
+            normSymbols: document.getElementById('norm-symbols'),
+            // Model status
+            modelStatus: document.getElementById('model-status'),
+            vramDisplay: document.getElementById('vram-display'),
+            modelToggleBtn: document.getElementById('model-toggle-btn')
         };
 
         this.initialize();
@@ -29,8 +42,6 @@ export class App {
         this.playerState = new PlayerState();
         this.audioService = new AudioService();
         this.voiceService = new VoiceService();
-
-        this.renderVersionBadge();
 
         // Initialize components
         this.playerControls = new PlayerControls(this.audioService, this.playerState);
@@ -47,6 +58,10 @@ export class App {
             }
         });
 
+        // Set default sample text
+        const sampleText = "The quick brown fox jumps over the lazy dog. This classic pangram contains every letter of the English alphabet at least once. It has been used for decades to test typewriters, fonts, and text-to-speech systems. Feel free to replace this text with your own content to generate natural-sounding speech.";
+        this.textEditor.setText(sampleText);
+
         // Initialize voice selector
         const voicesLoaded = await this.voiceSelector.initialize();
         if (!voicesLoaded) {
@@ -55,47 +70,14 @@ export class App {
             return;
         }
 
+        // Initialize voice demos with callback to update selected voices display
+        this.voiceDemos = new VoiceDemos(this.voiceService, () => {
+            this.voiceSelector.updateSelectedVoicesDisplay();
+        });
+        await this.voiceDemos.initialize();
+
         this.setupEventListeners();
         this.setupAudioEvents();
-        this.applyBrowserStreamingNotice();
-    }
-
-    async renderVersionBadge() {
-        const badge = document.getElementById('version-badge');
-        if (!badge) return;
-        try {
-            await config.ensureInitialized();
-            if (config.version) {
-                badge.textContent = `v${config.version}`;
-                badge.hidden = false;
-            }
-        } catch (_) {
-            // leave hidden on failure
-        }
-    }
-
-    applyBrowserStreamingNotice() {
-        const notice = this.elements.streamingNotice;
-        if (!notice) {
-            return;
-        }
-        const format = this.elements.formatSelect?.value || 'mp3';
-        const formatLabel = format.toUpperCase();
-        const isFirefox = /Firefox\//.test(navigator.userAgent);
-        let message = '';
-
-        if (format === 'pcm') {
-            message = 'PCM output can be generated, but in-browser playback may be unsupported.';
-        } else if (format !== 'mp3') {
-            message = `${formatLabel} output will be generated, playback and/or download will be available when generation finishes.`;
-        } else if (!this.audioService.supportsMSEMp3()) {
-            message = isFirefox
-                ? 'Audio streaming is not currently supported in Firefox. Playback and/or download should stilll be available when generation finishes.'
-                : 'This browser may not support streaming. Playback and/or download should still be available when generation finishes.';
-        }
-
-        notice.textContent = message;
-        notice.hidden = !message;
     }
 
     setupEventListeners() {
@@ -105,9 +87,6 @@ export class App {
         // Download button
         this.elements.downloadBtn.addEventListener('click', () => this.downloadAudio());
 
-        // Keep browser/output warning aligned with the selected format
-        this.elements.formatSelect.addEventListener('change', () => this.applyBrowserStreamingNotice());
-
         // Cancel button
         this.elements.cancelBtn.addEventListener('click', () => {
             this.audioService.cancel();
@@ -116,12 +95,104 @@ export class App {
             this.showStatus('Generation cancelled', 'info');
         });
 
+        // Gain slider
+        if (this.elements.gainSlider) {
+            this.elements.gainSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value).toFixed(1);
+                if (this.elements.gainValue) {
+                    this.elements.gainValue.textContent = value;
+                }
+            });
+        }
+
+        // Model toggle button
+        if (this.elements.modelToggleBtn) {
+            this.elements.modelToggleBtn.addEventListener('click', () => this.toggleModel());
+        }
+
         // Handle page unload
         window.addEventListener('beforeunload', () => {
             this.audioService.cleanup();
             this.playerControls.cleanup();
             this.waveVisualizer.cleanup();
+            this.voiceDemos.cleanup();
         });
+
+        // Start model status polling
+        this.pollModelStatus();
+    }
+
+    async pollModelStatus() {
+        try {
+            const response = await fetch('/debug/model/status');
+            if (response.ok) {
+                const status = await response.json();
+                this.updateModelStatusDisplay(status);
+            }
+        } catch (error) {
+            console.warn('Failed to fetch model status:', error);
+        }
+        // Poll every 10 seconds
+        setTimeout(() => this.pollModelStatus(), 10000);
+    }
+
+    updateModelStatusDisplay(status) {
+        if (!this.elements.modelStatus) return;
+
+        const statusEl = this.elements.modelStatus;
+        const textEl = statusEl.querySelector('.status-text');
+        const vramEl = this.elements.vramDisplay;
+        const toggleBtn = this.elements.modelToggleBtn;
+
+        statusEl.classList.remove('loaded', 'unloaded', 'error');
+
+        if (status.loaded) {
+            statusEl.classList.add('loaded');
+            textEl.textContent = `Model: ${status.device || 'Loaded'}`;
+            if (toggleBtn) {
+                toggleBtn.textContent = 'Unload';
+                toggleBtn.style.display = 'block';
+            }
+        } else {
+            statusEl.classList.add('unloaded');
+            textEl.textContent = 'Model: Unloaded';
+            if (toggleBtn) {
+                toggleBtn.textContent = 'Load';
+                toggleBtn.style.display = 'block';
+            }
+        }
+
+        // Display VRAM if available
+        if (vramEl && status.vram) {
+            const used = (status.vram.allocated_mb / 1024).toFixed(1);
+            const total = (status.vram.total_mb / 1024).toFixed(1);
+            vramEl.textContent = `VRAM: ${used}/${total}GB`;
+        } else if (vramEl) {
+            vramEl.textContent = '';
+        }
+    }
+
+    async toggleModel() {
+        const btn = this.elements.modelToggleBtn;
+        if (!btn) return;
+
+        const isLoaded = this.elements.modelStatus?.classList.contains('loaded');
+        const endpoint = isLoaded ? '/debug/model/unload' : '/debug/model/load';
+
+        btn.disabled = true;
+        btn.textContent = isLoaded ? 'Unloading...' : 'Loading...';
+
+        try {
+            const response = await fetch(endpoint, { method: 'POST' });
+            const result = await response.json();
+            this.showStatus(result.message, result.status === 'success' ? 'success' : 'info');
+            // Refresh status immediately
+            this.pollModelStatus();
+        } catch (error) {
+            this.showStatus('Failed to toggle model', 'error');
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     setupAudioEvents() {
@@ -156,9 +227,7 @@ export class App {
         // Handle download ready
         this.audioService.addEventListener('downloadReady', () => {
             setTimeout(() => {
-                if (!this._playbackFailed) {
-                    this.showStatus('Generation complete', 'success');
-                }
+                this.showStatus('Generation complete', 'success');
             }, 500); // Small delay to ensure "Preparing file..." is visible
         });
 
@@ -172,15 +241,6 @@ export class App {
             this.showStatus('Error: ' + error.message, 'error');
             this.setGenerating(false);
             this.elements.downloadBtn.style.display = 'none';
-        });
-
-        // Block-mode playback failure: file is still available for download
-        this.audioService.addEventListener('playbackUnavailable', () => {
-            this._playbackFailed = true;
-            this.showStatus(
-                'Playback unavailable in this browser. Use the download below.',
-                'info'
-            );
         });
     }
 
@@ -225,32 +285,49 @@ export class App {
         const text = this.textEditor.getText().trim();
         const voice = this.voiceService.getSelectedVoiceString();
         const speed = this.playerState.getState().speed;
+        const inputMode = this.textEditor.getInputMode();
+
+        // Collect advanced options
+        const options = this.getGenerationOptions();
 
         this.setGenerating(true);
-        this._playbackFailed = false;
         this.elements.downloadBtn.classList.remove('ready');
 
         // Just reset progress bar, don't do full cleanup
         this.waveVisualizer.updateProgress(0, 1);
-        
+
         try {
-            console.log('Starting audio generation...', { text, voice, speed });
-            
+            console.log('Starting audio generation...', { text, voice, speed, inputMode, options });
+
             // Ensure we have valid input
             if (!text || !voice) {
                 console.error('Invalid input:', { text, voice, speed });
                 throw new Error('Invalid input parameters');
             }
-            
-            await this.audioService.streamAudio(
-                text,
-                voice,
-                speed,
-                (loaded, total) => {
-                    console.log('Progress update:', { loaded, total });
-                    this.waveVisualizer.updateProgress(loaded, total);
-                }
-            );
+
+            if (inputMode === 'phonemes') {
+                // Generate directly from phonemes
+                await this.audioService.generateFromPhonemes(
+                    text,
+                    voice,
+                    (loaded, total) => {
+                        console.log('Progress update:', { loaded, total });
+                        this.waveVisualizer.updateProgress(loaded, total);
+                    }
+                );
+            } else {
+                // Normal text-to-speech
+                await this.audioService.streamAudio(
+                    text,
+                    voice,
+                    speed,
+                    (loaded, total) => {
+                        console.log('Progress update:', { loaded, total });
+                        this.waveVisualizer.updateProgress(loaded, total);
+                    },
+                    options
+                );
+            }
         } catch (error) {
             console.error('Generation error:', error);
             if (error.name !== 'AbortError') {
@@ -258,6 +335,53 @@ export class App {
                 this.setGenerating(false);
             }
         }
+    }
+
+    getGenerationOptions() {
+        const options = {};
+
+        // Volume multiplier
+        if (this.elements.gainSlider) {
+            const gain = parseFloat(this.elements.gainSlider.value);
+            if (gain !== 1.0) {
+                options.volumeMultiplier = gain;
+            }
+        }
+
+        // Normalization options - only include if user has changed defaults
+        const normOptions = {};
+        let hasNormChanges = false;
+
+        if (this.elements.normUnits?.checked) {
+            normOptions.unit_normalization = true;
+            hasNormChanges = true;
+        }
+        if (this.elements.normUrls && !this.elements.normUrls.checked) {
+            normOptions.url_normalization = false;
+            hasNormChanges = true;
+        }
+        if (this.elements.normEmails && !this.elements.normEmails.checked) {
+            normOptions.email_normalization = false;
+            hasNormChanges = true;
+        }
+        if (this.elements.normPhones && !this.elements.normPhones.checked) {
+            normOptions.phone_normalization = false;
+            hasNormChanges = true;
+        }
+        if (this.elements.normPlurals && !this.elements.normPlurals.checked) {
+            normOptions.optional_pluralization_normalization = false;
+            hasNormChanges = true;
+        }
+        if (this.elements.normSymbols && !this.elements.normSymbols.checked) {
+            normOptions.replace_remaining_symbols = false;
+            hasNormChanges = true;
+        }
+
+        if (hasNormChanges) {
+            options.normalizationOptions = normOptions;
+        }
+
+        return options;
     }
 
     downloadAudio() {

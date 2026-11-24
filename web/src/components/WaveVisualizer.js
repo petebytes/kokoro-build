@@ -78,8 +78,8 @@ export class WaveVisualizer {
 
     cleanup() {
         if (this.wave) {
-            if (typeof this.wave.stop === 'function') this.wave.stop();
-            if (typeof this.wave.dispose === 'function') this.wave.dispose();
+            this.wave.stop();
+            this.wave.dispose();
             this.wave = null;
         }
         

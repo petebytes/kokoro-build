@@ -98,6 +98,14 @@ Model files not found! You need to download the Kokoro V1 model:
         except Exception as e:
             raise RuntimeError(f"Warmup failed: {e}")
 
+    async def ensure_loaded(self) -> None:
+        """Ensure model is loaded, loading it if necessary (lazy loading)."""
+        if not self._backend or not self._backend.is_loaded:
+            logger.info("Model not loaded, initializing on first request...")
+            from .voice_manager import get_manager as get_voice_manager
+            voice_manager = await get_voice_manager()
+            await self.initialize_with_warmup(voice_manager)
+
     def get_backend(self) -> BaseModelBackend:
         """Get initialized backend.
 
@@ -133,11 +141,17 @@ Model files not found! You need to download the Kokoro V1 model:
     async def generate(self, *args, **kwargs):
         """Generate audio using initialized backend.
 
+        Automatically loads model on first use (lazy loading).
+
         Raises:
             RuntimeError: If generation fails
         """
-        if not self._backend:
-            raise RuntimeError("Backend not initialized")
+        # Lazy load model if not already loaded
+        if not self._backend or not self._backend.is_loaded:
+            logger.info("Model not loaded, initializing on first request...")
+            from .voice_manager import get_manager as get_voice_manager
+            voice_manager = await get_voice_manager()
+            await self.initialize_with_warmup(voice_manager)
 
         try:
             async for chunk in self._backend.generate(*args, **kwargs):

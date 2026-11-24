@@ -3,16 +3,18 @@ export default class TextEditor {
         this.options = {
             charsPerPage: 500,  // Default to 500 chars per page
             onTextChange: null,
+            onModeChange: null,
             ...options
         };
-        
+
         this.container = container;
         this.currentPage = 1;
         this.pages = [''];
         this.charCount = 0;
         this.fullText = '';
         this.isTyping = false;
-        
+        this.inputMode = 'text'; // 'text' or 'phonemes'
+
         this.setupDOM();
         this.bindEvents();
     }
@@ -21,6 +23,24 @@ export default class TextEditor {
         this.container.innerHTML = `
             <div class="text-editor">
                 <div class="editor-view">
+                    <div class="input-mode-toggle">
+                        <button class="mode-btn active" data-mode="text">Text</button>
+                        <button class="mode-btn" data-mode="phonemes">Phonemes</button>
+                    </div>
+                    <div class="editor-toolbar">
+                        <div class="toolbar-group text-mode-only">
+                            <span class="toolbar-label">Insert Pause:</span>
+                            <button class="pause-btn" data-pause="0.5s">0.5s</button>
+                            <button class="pause-btn" data-pause="1s">1s</button>
+                            <button class="pause-btn" data-pause="2s">2s</button>
+                        </div>
+                        <div class="toolbar-group text-mode-only">
+                            <button class="phoneme-preview-btn" title="Preview how text will be pronounced">Preview</button>
+                        </div>
+                        <div class="toolbar-group phoneme-mode-only" style="display: none;">
+                            <span class="toolbar-label phoneme-hint">Enter IPA phonemes directly (e.g., həˈloʊ wɝːld)</span>
+                        </div>
+                    </div>
                     <div class="page-navigation">
                         <div class="pagination">
                             <button class="prev-btn">← Previous</button>
@@ -30,7 +50,7 @@ export default class TextEditor {
                     </div>
                     <textarea
                         class="page-content"
-                        placeholder="Enter text to convert to speech..."
+                        placeholder="Enter text to convert to speech. Use [pause:1s] for pauses."
                     ></textarea>
                     <div class="editor-footer">
                         <div class="file-controls">
@@ -67,7 +87,12 @@ export default class TextEditor {
             clearBtn: this.container.querySelector('.clear-btn'),
             charCount: this.container.querySelector('.char-count'),
             charsPerPage: this.container.querySelector('.chars-input'),
-            formatBtn: this.container.querySelector('.format-btn')
+            formatBtn: this.container.querySelector('.format-btn'),
+            pauseBtns: this.container.querySelectorAll('.pause-btn'),
+            phonemePreviewBtn: this.container.querySelector('.phoneme-preview-btn'),
+            modeBtns: this.container.querySelectorAll('.mode-btn'),
+            textModeElements: this.container.querySelectorAll('.text-mode-only'),
+            phonemeModeElements: this.container.querySelectorAll('.phoneme-mode-only')
         };
 
         // Set initial chars per page value
@@ -157,6 +182,160 @@ export default class TextEditor {
                 this.options.charsPerPage = value;
                 this.splitIntoPages(this.fullText);
             }
+        });
+
+        // Pause insertion buttons
+        this.elements.pauseBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pauseDuration = btn.dataset.pause;
+                this.insertAtCursor(`[pause:${pauseDuration}]`);
+            });
+        });
+
+        // Phoneme preview button
+        if (this.elements.phonemePreviewBtn) {
+            this.elements.phonemePreviewBtn.addEventListener('click', () => {
+                this.showPhonemePreview();
+            });
+        }
+
+        // Mode toggle buttons
+        this.elements.modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                this.setInputMode(mode);
+            });
+        });
+    }
+
+    setInputMode(mode) {
+        this.inputMode = mode;
+
+        // Update button states
+        this.elements.modeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Show/hide mode-specific elements
+        this.elements.textModeElements.forEach(el => {
+            el.style.display = mode === 'text' ? '' : 'none';
+        });
+        this.elements.phonemeModeElements.forEach(el => {
+            el.style.display = mode === 'phonemes' ? '' : 'none';
+        });
+
+        // Update placeholder
+        if (mode === 'phonemes') {
+            this.elements.pageContent.placeholder = 'Enter IPA phonemes directly (e.g., həˈloʊ wɝːld)';
+        } else {
+            this.elements.pageContent.placeholder = 'Enter text to convert to speech. Use [pause:1s] for pauses.';
+        }
+
+        // Notify callback
+        if (this.options.onModeChange) {
+            this.options.onModeChange(mode);
+        }
+    }
+
+    getInputMode() {
+        return this.inputMode;
+    }
+
+    insertAtCursor(text) {
+        const textarea = this.elements.pageContent;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const value = textarea.value;
+
+        textarea.value = value.substring(0, start) + text + value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + text.length;
+
+        // Update the page content
+        this.pages[this.currentPage - 1] = textarea.value;
+        this.fullText = this.pages.join(' ');
+        this.updateCharCount();
+
+        if (this.options.onTextChange) {
+            this.options.onTextChange(this.fullText);
+        }
+
+        textarea.focus();
+    }
+
+    async showPhonemePreview() {
+        const text = this.getText().trim();
+        if (!text) {
+            alert('Please enter some text first');
+            return;
+        }
+
+        // Get selected text or use first 200 chars
+        const textarea = this.elements.pageContent;
+        let previewText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+        if (!previewText) {
+            previewText = text.substring(0, 200);
+        }
+
+        try {
+            this.elements.phonemePreviewBtn.textContent = 'Loading...';
+            this.elements.phonemePreviewBtn.disabled = true;
+
+            const response = await fetch('/dev/phonemize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: previewText,
+                    language: document.getElementById('lang-select')?.value || 'a'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get phonemes');
+            }
+
+            const data = await response.json();
+            this.showPhonemeModal(previewText, data.phonemes);
+        } catch (error) {
+            console.error('Phoneme preview error:', error);
+            alert('Failed to preview phonemes: ' + error.message);
+        } finally {
+            this.elements.phonemePreviewBtn.textContent = 'Preview';
+            this.elements.phonemePreviewBtn.disabled = false;
+        }
+    }
+
+    showPhonemeModal(originalText, phonemes) {
+        // Remove existing modal if any
+        const existing = document.querySelector('.phoneme-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'phoneme-modal';
+        modal.innerHTML = `
+            <div class="phoneme-modal-content">
+                <div class="phoneme-modal-header">
+                    <h3>Pronunciation Preview</h3>
+                    <button class="phoneme-modal-close">&times;</button>
+                </div>
+                <div class="phoneme-modal-body">
+                    <div class="phoneme-section">
+                        <label>Original Text:</label>
+                        <div class="phoneme-text">${originalText}</div>
+                    </div>
+                    <div class="phoneme-section">
+                        <label>Phonemes (how it sounds):</label>
+                        <div class="phoneme-output">${phonemes}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Close handlers
+        modal.querySelector('.phoneme-modal-close').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
         });
     }
 

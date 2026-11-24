@@ -171,6 +171,46 @@ async def stream_audio_chunks(
         raise
 
 
+@router.get("/audio/speech")
+async def get_speech(
+    text: str,
+    voice: str,
+    speed: float = 1.0,
+):
+    """Simple GET endpoint for audio playback in browser"""
+    try:
+        tts_service = await get_tts_service()
+        voice_name = await process_and_validate_voices(voice, tts_service)
+
+        writer = StreamingAudioWriter("mp3", sample_rate=24000)
+
+        # Generate audio
+        audio_chunks = []
+        async for chunk_data in tts_service.generate_audio_stream(
+            text=text,
+            voice=voice_name,
+            writer=writer,
+            speed=speed,
+            output_format="mp3",
+        ):
+            if chunk_data.output:
+                audio_chunks.append(chunk_data.output)
+
+        writer.close()
+        audio_data = b"".join(audio_chunks)
+
+        return Response(
+            content=audio_data,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating speech: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate speech")
+
+
 @router.post("/audio/speech")
 async def create_speech(
     request: OpenAISpeechRequest,
@@ -471,12 +511,6 @@ async def list_models():
                 "created": 1686935002,
                 "owned_by": "kokoro",
             },
-            {
-                "id": "gpt-4o-mini-tts",
-                "object": "model",
-                "created": 1686935002,
-                "owned_by": "kokoro",
-            },
         ]
 
         return {"object": "list", "data": models}
@@ -546,20 +580,12 @@ async def retrieve_model(model: str):
 
 
 @router.get("/audio/voices")
-async def list_voices(legacy: bool = False):
-    """List all available voices for text-to-speech.
-
-    Returns `[{"id": ..., "name": ...}, ...]` by default so OpenAI-compatible
-    clients (Open WebUI in particular, which does `voice['id']` directly and
-    silently falls back to a hardcoded 6-voice list otherwise) can render the
-    full voice list. Pass `?legacy=true` for the pre-0.3.x plain-string shape.
-    """
+async def list_voices():
+    """List all available voices for text-to-speech"""
     try:
         tts_service = await get_tts_service()
         voices = await tts_service.list_voices()
-        if legacy:
-            return {"voices": voices}
-        return {"voices": [{"id": v, "name": v} for v in voices]}
+        return {"voices": voices}
     except Exception as e:
         logger.error(f"Error listing voices: {str(e)}")
         raise HTTPException(

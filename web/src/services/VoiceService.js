@@ -3,7 +3,7 @@ import { config } from '../config.js';
 export class VoiceService {
     constructor() {
         this.availableVoices = [];
-        this.selectedVoices = new Map(); // Changed to Map to store voice:weight pairs
+        this.selectedVoices = new Map(); // Map to store voice: {weight, operator} pairs
     }
 
     async loadVoices() {
@@ -20,7 +20,7 @@ export class VoiceService {
                 throw new Error('No voices available');
             }
 
-            this.availableVoices = data.voices.map(v => typeof v === 'string' ? v : v.id);
+            this.availableVoices = data.voices;
             
             // Select first voice if none selected
             if (this.selectedVoices.size === 0) {
@@ -46,29 +46,36 @@ export class VoiceService {
     }
 
     getSelectedVoiceWeights() {
-        return Array.from(this.selectedVoices.entries()).map(([voice, weight]) => ({
+        return Array.from(this.selectedVoices.entries()).map(([voice, data]) => ({
             voice,
-            weight
+            weight: data.weight,
+            operator: data.operator
         }));
     }
 
     getSelectedVoiceString() {
         const entries = Array.from(this.selectedVoices.entries());
-        
-        // If only one voice with weight 1, return just the voice name
-        if (entries.length === 1 && entries[0][1] === 1) {
+
+        // If only one voice with weight 1 and + operator, return just the voice name
+        if (entries.length === 1 && entries[0][1].weight === 1 && entries[0][1].operator === '+') {
             return entries[0][0];
         }
-        
-        // Otherwise return voice(weight) format
+
+        // Build voice string with operators
         return entries
-            .map(([voice, weight]) => `${voice}(${weight})`)
-            .join('+');
+            .map(([voice, data], index) => {
+                const prefix = index === 0 ? '' : data.operator;
+                return `${prefix}${voice}(${data.weight})`;
+            })
+            .join('');
     }
 
-    addVoice(voice, weight = 1) {
+    addVoice(voice, weight = 1, operator = '+') {
         if (this.availableVoices.includes(voice)) {
-            this.selectedVoices.set(voice, parseFloat(weight) || 1);
+            this.selectedVoices.set(voice, {
+                weight: parseFloat(weight) || 1,
+                operator: operator
+            });
             return true;
         }
         return false;
@@ -76,7 +83,19 @@ export class VoiceService {
 
     updateWeight(voice, weight) {
         if (this.selectedVoices.has(voice)) {
-            this.selectedVoices.set(voice, parseFloat(weight) || 1);
+            const data = this.selectedVoices.get(voice);
+            data.weight = parseFloat(weight) || 1;
+            this.selectedVoices.set(voice, data);
+            return true;
+        }
+        return false;
+    }
+
+    updateOperator(voice, operator) {
+        if (this.selectedVoices.has(voice)) {
+            const data = this.selectedVoices.get(voice);
+            data.operator = operator;
+            this.selectedVoices.set(voice, data);
             return true;
         }
         return false;

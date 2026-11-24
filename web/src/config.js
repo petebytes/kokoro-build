@@ -6,7 +6,6 @@
 class Config {
     constructor() {
         this.rootPath = '';
-        this.version = '';
         this.initialized = false;
         this.initPromise = this.initialize();
     }
@@ -26,9 +25,6 @@ class Config {
                 if (serverConfig.root_path !== undefined) {
                     this.rootPath = serverConfig.root_path.replace(/\/$/, '');
                     console.log('Config loaded from server. Root path:', this.rootPath);
-                }
-                if (serverConfig.version !== undefined) {
-                    this.version = serverConfig.version;
                 }
             } else {
                 console.log('Using detected root path:', this.rootPath);

@@ -123,6 +123,11 @@ export class PlayerControls {
             this.stopTimeUpdate();
         });
 
+        this.audioService.addEventListener('complete', () => {
+            // Update duration after generation completes so play button is enabled
+            setTimeout(() => this.updateTimeDisplay(), 100);
+        });
+
         // Initial time display
         this.updateTimeDisplay();
     }

@@ -174,7 +174,7 @@ class TTSService:
             raise ValueError(f"Voice not found at path: {path}")
 
         logger.debug(f"Loading voice tensor from path: {path}")
-        return torch.load(path, map_location="cpu", weights_only=True) * weight
+        return torch.load(path, map_location="cpu") * weight
 
     async def _get_voices_path(self, voice: str) -> Tuple[str, str]:
         """Get voice path, handling combined voices.
@@ -272,6 +272,9 @@ class TTSService:
         chunk_index = 0
         current_offset = 0.0
         try:
+            # Ensure model is loaded (lazy loading)
+            await self.model_manager.ensure_loaded()
+
             # Get backend
             backend = self.model_manager.get_backend()
 

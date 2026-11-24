@@ -1,9 +1,9 @@
 /* Main Layout */
 main {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 320px 280px;
     gap: 1rem;
-    width: 80%;
+    width: 90%;
     margin: 0 auto;
     min-width: 0;
     height: calc(100vh - 8rem);

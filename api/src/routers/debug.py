@@ -207,3 +207,93 @@ async def get_session_pool_info():
                 pass
 
     return pool_info
+
+
+@router.post("/debug/model/load")
+async def load_model():
+    """Manually load the TTS model into VRAM."""
+    from ..inference.model_manager import get_manager
+    from ..inference.voice_manager import get_manager as get_voice_manager
+
+    manager = await get_manager()
+
+    # Check if already loaded
+    if manager._backend and manager._backend.is_loaded:
+        return {
+            "status": "already_loaded",
+            "message": "Model is already loaded",
+            "device": manager._device
+        }
+
+    try:
+        voice_manager = await get_voice_manager()
+        device, model_type, voicepack_count = await manager.initialize_with_warmup(voice_manager)
+        return {
+            "status": "success",
+            "message": "Model loaded successfully",
+            "device": device,
+            "model_type": model_type,
+            "voicepack_count": voicepack_count
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to load model: {str(e)}"
+        }
+
+
+@router.post("/debug/model/unload")
+async def unload_model():
+    """Manually unload the TTS model from VRAM to free memory."""
+    from ..inference.model_manager import get_manager
+
+    manager = await get_manager()
+
+    # Check if loaded
+    if not manager._backend or not manager._backend.is_loaded:
+        return {
+            "status": "not_loaded",
+            "message": "Model is not currently loaded"
+        }
+
+    try:
+        manager.unload_all()
+        # Clear CUDA cache if using GPU
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return {
+            "status": "success",
+            "message": "Model unloaded successfully, VRAM freed"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to unload model: {str(e)}"
+        }
+
+
+@router.get("/debug/model/status")
+async def get_model_status():
+    """Get current model loading status and VRAM usage."""
+    from ..inference.model_manager import get_manager
+
+    manager = await get_manager()
+
+    is_loaded = manager._backend and manager._backend.is_loaded
+    device = manager._device if manager._device else "not_initialized"
+
+    status = {
+        "loaded": is_loaded,
+        "device": device,
+        "backend_type": manager.current_backend if is_loaded else None
+    }
+
+    # Add VRAM info if CUDA is available
+    if torch.cuda.is_available():
+        status["vram"] = {
+            "allocated_mb": torch.cuda.memory_allocated() / (1024 ** 2),
+            "reserved_mb": torch.cuda.memory_reserved() / (1024 ** 2),
+            "total_mb": torch.cuda.get_device_properties(0).total_memory / (1024 ** 2)
+        }
+
+    return status
