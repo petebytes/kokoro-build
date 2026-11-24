@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="styles/responsive.css">
     <link rel="stylesheet" href="styles/badges.css">
     <link rel="stylesheet" href="styles/controls.css">
+    <link rel="stylesheet" href="styles/voice-demos.css">
     <script src="./siriwave.js"></script>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
 </head>
@@ -71,20 +72,6 @@
             </div>
             <div class="controls">
                 <div class="voice-select-container">
-                    <div class="voice-search-wrapper">
-                        <input 
-                            type="text" 
-                            id="voice-search" 
-                            class="voice-search" 
-                            placeholder="Search voices..."
-                            autocomplete="off"
-                        >
-                        <div class="voice-dropdown" id="voice-dropdown">
-                            <div class="voice-options" id="voice-options">
-                                <!-- Voice options will be inserted here -->
-                            </div>
-                        </div>
-                    </div>
                     <div class="selected-voices" id="selected-voices">
                         <!-- Selected voice tags will appear here -->
                     </div>
@@ -94,12 +81,16 @@
                         <label for="speed-slider">Speed: <span id="speed-value">1.0</span>x</label>
                         <input type="range" id="speed-slider" min="0.1" max="4" step="0.1" value="1.0">
                     </div>
+                    <div class="gain-control">
+                        <label for="gain-slider">Gain: <span id="gain-value">1.0</span>x</label>
+                        <input type="range" id="gain-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+                    </div>
                     <div class="lang-control">
                         <label for="lang-select">Language:</label>
                         <select id="lang-select" class="lang-select">
                             <option value="">Auto</option>
                             <option value="e">Spanish</option>
-                            <option value="a">English</option>
+                            <option value="a" selected>English</option>
                             <option value="f">French</option>
                             <option value="h">Hindi</option>
                             <option value="i">Italian</option>
@@ -109,6 +100,17 @@
                         </select>
                     </div>
                 </div>
+                <details class="advanced-options">
+                    <summary>Advanced Options</summary>
+                    <div class="normalization-toggles">
+                        <label><input type="checkbox" id="norm-units"> Units (10KB → 10 kilobytes)</label>
+                        <label><input type="checkbox" id="norm-urls" checked> URL pronunciation</label>
+                        <label><input type="checkbox" id="norm-emails" checked> Email pronunciation</label>
+                        <label><input type="checkbox" id="norm-phones" checked> Phone numbers</label>
+                        <label><input type="checkbox" id="norm-plurals" checked> Pluralization (s)</label>
+                        <label><input type="checkbox" id="norm-symbols" checked> Symbol replacement</label>
+                    </div>
+                </details>
                 <div class="button-group">
                     <button id="generate-btn">
                         <span class="btn-text">Generate Speech</span>
@@ -116,11 +118,13 @@
                     </button>
                     <div class="generation-options">
                         <label>
-                            <input type="checkbox" id="autoplay-toggle" checked>
+                            <input type="checkbox" id="autoplay-toggle">
                             Auto-play
                         </label>
                         <select id="format-select" class="format-select">
                             <option value="mp3">MP3</option>
+                            <option value="opus">Opus</option>
+                            <option value="flac">FLAC</option>
                             <option value="wav">WAV</option>
                             <option value="pcm">PCM</option>
                         </select>
@@ -130,6 +134,31 @@
                     </button>
                 </div>
                 <div id="status" class="status"></div>
+                <div class="model-status-container">
+                    <div class="model-status" id="model-status">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">Checking...</span>
+                    </div>
+                    <div class="vram-display" id="vram-display"></div>
+                    <button id="model-toggle-btn" class="model-toggle-btn" style="display: none;">Unload</button>
+                </div>
+            </div>
+            <div class="voice-demos">
+                <div class="voice-demos-header">
+                    <h3>Voice Samples</h3>
+                </div>
+                <div class="voice-demo-search-wrapper">
+                    <input
+                        type="text"
+                        id="voice-demo-search"
+                        class="voice-demo-search"
+                        placeholder="Search samples..."
+                        autocomplete="off"
+                    >
+                </div>
+                <div id="voice-demo-list" class="voice-demo-list">
+                    <!-- Voice demo items will be inserted here -->
+                </div>
             </div>
         </main>
     </div>

@@ -20,6 +20,190 @@
     min-height: 0;
 }
 
+/* Input Mode Toggle */
+.input-mode-toggle {
+    display: flex;
+    gap: 0;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    width: fit-content;
+}
+
+.mode-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-light);
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.35rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mode-btn:hover {
+    color: var(--text);
+}
+
+.mode-btn.active {
+    background: rgba(99, 102, 241, 0.3);
+    color: var(--text);
+}
+
+.phoneme-hint {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* Editor Toolbar */
+.editor-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    gap: 1rem;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.toolbar-label {
+    color: var(--text-light);
+    font-size: 0.75rem;
+}
+
+.pause-btn {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pause-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--fg-color);
+}
+
+.phoneme-preview-btn {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: var(--text);
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.phoneme-preview-btn:hover {
+    background: rgba(99, 102, 241, 0.3);
+}
+
+.phoneme-preview-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Phoneme Modal */
+.phoneme-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 1rem;
+}
+
+.phoneme-modal-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow: auto;
+}
+
+.phoneme-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.phoneme-modal-header h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.phoneme-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-light);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.phoneme-modal-close:hover {
+    color: var(--text);
+}
+
+.phoneme-modal-body {
+    padding: 1rem;
+}
+
+.phoneme-section {
+    margin-bottom: 1rem;
+}
+
+.phoneme-section:last-child {
+    margin-bottom: 0;
+}
+
+.phoneme-section label {
+    display: block;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.phoneme-text,
+.phoneme-output {
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    color: var(--text);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.phoneme-output {
+    font-family: monospace;
+    background: rgba(99, 102, 241, 0.1);
+}
+
 .page-content {
     flex: 1;
     width: 100%;

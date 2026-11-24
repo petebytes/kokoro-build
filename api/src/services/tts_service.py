@@ -272,6 +272,9 @@ class TTSService:
         chunk_index = 0
         current_offset = 0.0
         try:
+            # Ensure model is loaded (lazy loading)
+            await self.model_manager.ensure_loaded()
+
             # Get backend
             backend = self.model_manager.get_backend()
 

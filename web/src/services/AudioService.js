@@ -1,5 +1,3 @@
-import { config } from '../config.js';
-
 export class AudioService {
     constructor() {
         this.mediaSource = null;
@@ -15,40 +13,52 @@ export class AudioService {
         this.pendingOperations = []; // Queue for buffer operations
     }
 
-    async streamAudio(text, voice, speed, onProgress) {
+    async streamAudio(text, voice, speed, onProgress, options = {}) {
         try {
-            console.log('AudioService: Starting stream...', { text, voice, speed });
-            
+            console.log('AudioService: Starting stream...', { text, voice, speed, options });
+
             if (this.controller) {
                 this.controller.abort();
                 this.controller = null;
             }
-            
+
             this.controller = new AbortController();
             this.cleanup();
             onProgress?.(0, 1); // Reset progress to 0
             this.textLength = text.length;
             this.shouldAutoplay = document.getElementById('autoplay-toggle').checked;
-            
+
             // Calculate expected number of chunks based on text length
             const estimatedChunks = Math.max(1, Math.ceil(this.textLength / this.CHARS_PER_CHUNK));
-            
+
             console.log('AudioService: Making API call...', { text, voice, speed });
-            
-            const apiUrl = await config.getApiUrl('/v1/audio/speech');
-            const response = await fetch(apiUrl, {
+
+            // Build request body with optional parameters
+            const requestBody = {
+                input: text,
+                voice: voice,
+                response_format: 'mp3', // Always use mp3 for streaming playback
+                download_format: document.getElementById('format-select').value || 'mp3', // Format for final download
+                stream: true,
+                speed: speed,
+                return_download_link: true,
+                lang_code: document.getElementById('lang-select').value || undefined
+            };
+
+            // Add volume multiplier if provided
+            if (options.volumeMultiplier !== undefined) {
+                requestBody.volume_multiplier = options.volumeMultiplier;
+            }
+
+            // Add normalization options if provided
+            if (options.normalizationOptions) {
+                requestBody.normalization_options = options.normalizationOptions;
+            }
+
+            const response = await fetch('/v1/audio/speech', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    input: text,
-                    voice: voice,
-                    response_format: 'mp3', // Always use mp3 for streaming playback
-                    download_format: document.getElementById('format-select').value || 'mp3', // Format for final download
-                    stream: true,
-                    speed: speed,
-                    return_download_link: true,
-                    lang_code: document.getElementById('lang-select').value || undefined
-                }),
+                body: JSON.stringify(requestBody),
                 signal: this.controller.signal
             });
 
@@ -85,7 +95,7 @@ export class AudioService {
         
         // Monitor for audio element errors
         this.audio.addEventListener('error', (e) => {
-            console.error('Audio error:', this.audio.error);
+            console.error('Audio error:', e.target?.error);
         });
 
         this.audio.addEventListener('ended', () => {
@@ -127,8 +137,7 @@ export class AudioService {
                     
                     const downloadPath = headers['x-download-path'];
                     if (downloadPath) {
-                        // Use config to prepend root path and /v1
-                        this.serverDownloadPath = await config.getApiUrl(`/v1${downloadPath}`);
+                        this.serverDownloadPath = `/v1${downloadPath}`;
                         console.log('Download path received:', this.serverDownloadPath);
                     } else {
                         console.warn('No X-Download-Path header found. Available headers:',
@@ -313,16 +322,21 @@ export class AudioService {
     }
 
     play() {
-        if (this.audio && this.audio.readyState >= 2 && !this.audio.error) {
+        if (this.audio && !this.audio.error) {
             const playPromise = this.audio.play();
             if (playPromise) {
-                playPromise.catch(error => {
-                    if (error.name !== 'AbortError') {
-                        console.error('Playback error:', error);
-                    }
-                });
+                playPromise
+                    .then(() => {
+                        this.dispatchEvent('play');
+                    })
+                    .catch(error => {
+                        if (error.name !== 'AbortError') {
+                            console.error('Playback error:', error);
+                        }
+                    });
+            } else {
+                this.dispatchEvent('play');
             }
-            this.dispatchEvent('play');
         }
     }
 
@@ -456,6 +470,77 @@ export class AudioService {
             return null;
         }
         return this.serverDownloadPath;
+    }
+
+    async generateFromPhonemes(phonemes, voice, onProgress) {
+        try {
+            console.log('AudioService: Generating from phonemes...', { phonemes, voice });
+
+            if (this.controller) {
+                this.controller.abort();
+                this.controller = null;
+            }
+
+            this.controller = new AbortController();
+            this.cleanup();
+            onProgress?.(0, 1);
+            this.shouldAutoplay = document.getElementById('autoplay-toggle').checked;
+
+            const response = await fetch('/dev/generate_from_phonemes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phonemes: phonemes,
+                    voice: voice
+                }),
+                signal: this.controller.signal
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail?.message || 'Failed to generate from phonemes');
+            }
+
+            // This endpoint returns WAV directly (not streaming JSON)
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            this.audio = new Audio(audioUrl);
+
+            this.audio.addEventListener('ended', () => {
+                this.dispatchEvent('ended');
+            });
+
+            this.audio.addEventListener('error', (e) => {
+                console.error('Audio error:', e.target?.error);
+                this.dispatchEvent('error', { message: 'Audio playback error' });
+            });
+
+            // Store blob URL for download
+            this.serverDownloadPath = audioUrl;
+            this.phonemeBlob = audioBlob;
+
+            onProgress?.(1, 1);
+            this.dispatchEvent('complete');
+
+            if (this.shouldAutoplay) {
+                setTimeout(() => this.play(), 100);
+            }
+
+            setTimeout(() => {
+                this.dispatchEvent('downloadReady');
+            }, 300);
+
+            return this.audio;
+        } catch (error) {
+            this.cleanup();
+            throw error;
+        }
+    }
+
+    // Override download for phoneme-generated audio
+    getDownloadBlob() {
+        return this.phonemeBlob || null;
     }
 }
 

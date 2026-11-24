@@ -59,21 +59,9 @@ async def lifespan(app: FastAPI):
     # Clean old temp files on startup
     await cleanup_temp_files()
 
-    logger.info("Loading TTS model and voice packs...")
-
-    try:
-        # Initialize managers
-        model_manager = await get_manager()
-        voice_manager = await get_voice_manager()
-
-        # Initialize model with warmup and get status
-        device, model, voicepack_count = await model_manager.initialize_with_warmup(
-            voice_manager
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to initialize model: {e}")
-        raise
+    # Initialize managers but don't load model yet (lazy loading)
+    model_manager = await get_manager()
+    voice_manager = await get_voice_manager()
 
     boundary = "░" * 2 * 12
     startup_msg = f"""
@@ -81,7 +69,7 @@ async def lifespan(app: FastAPI):
 {boundary}
 
     ╔═╗┌─┐┌─┐┌┬┐
-    ╠╣ ├─┤└─┐ │ 
+    ╠╣ ├─┤└─┐ │
     ╚  ┴ ┴└─┘ ┴
     ╦╔═┌─┐┬┌─┌─┐
     ╠╩╗│ │├┴┐│ │
@@ -89,14 +77,8 @@ async def lifespan(app: FastAPI):
 
 {boundary}
                 """
-    startup_msg += f"\nModel warmed up on {device}: {model}"
-    if device == "mps":
-        startup_msg += "\nUsing Apple Metal Performance Shaders (MPS)"
-    elif device == "cuda":
-        startup_msg += f"\nCUDA: {torch.cuda.is_available()}"
-    else:
-        startup_msg += "\nRunning on CPU"
-    startup_msg += f"\n{voicepack_count} voice packs loaded"
+    startup_msg += f"\nLazy loading enabled - model will load on first request"
+    startup_msg += f"\nTarget device: {'cuda' if settings.use_gpu else 'cpu'}"
 
     # Add web player info if enabled
     if settings.enable_web_player:
